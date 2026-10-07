@@ -1,5 +1,7 @@
 # ---- Stage 1: build the Angular app into static files ----
-FROM node:24-alpine AS build
+# The output is plain HTML/JS/CSS (architecture independent), so it is always
+# built natively on the build machine, even when producing an ARM image.
+FROM --platform=$BUILDPLATFORM node:24-alpine AS build
 WORKDIR /src
 
 # Install dependencies first (cached until package*.json changes).
