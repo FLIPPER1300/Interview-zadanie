@@ -1,0 +1,22 @@
+<header class="topbar">
+  <div class="brand">📞 Telefónny zoznam</div>
+  <div class="user">
+    <span>Prihlásený: <strong>{{ username }}</strong></span>
+    <button type="button" class="secondary" (click)="logout()">Odhlásiť</button>
+  </div>
+</header>
+
+<main class="container">
+  <app-phone-form (created)="onCreated($event)" />
+
+  @if (loading()) {
+    <p class="status">Načítavam…</p>
+  } @else if (loadError()) {
+    <p class="status error" role="alert">
+      Zoznam sa nepodarilo načítať.
+      <button type="button" class="secondary" (click)="load()">Skúsiť znova</button>
+    </p>
+  } @else {
+    <app-phone-list [entries]="entries()" />
+  }
+</main>

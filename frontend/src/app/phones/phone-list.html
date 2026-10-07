@@ -1,0 +1,55 @@
+<section class="card">
+  <div class="list-header">
+    <h2>Telefónne čísla</h2>
+    <div class="tabs" role="tablist">
+      @for (f of filters; track f.value) {
+        <button
+          type="button"
+          role="tab"
+          [class.active]="filter() === f.value"
+          [attr.aria-selected]="filter() === f.value"
+          (click)="filter.set(f.value)"
+        >
+          {{ f.label }} <span class="count">{{ count(f.value) }}</span>
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (visibleEntries().length === 0) {
+    <p class="empty">Zatiaľ tu nie sú žiadne čísla.</p>
+  } @else {
+    <table>
+      <thead>
+        <tr>
+          <th>Meno</th>
+          <th>Číslo</th>
+          <th>Zoznam</th>
+          <th>Pridal</th>
+          <th>Dátum</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of visibleEntries(); track entry.id) {
+          <tr>
+            <td data-label="Meno">{{ entry.name }}</td>
+            <td data-label="Číslo">
+              <a [href]="'tel:' + entry.number">{{ entry.number }}</a>
+            </td>
+            <td data-label="Zoznam">
+              @if (entry.visibility === 'Personal') {
+                <span class="badge personal">Osobný</span>
+              } @else {
+                <span class="badge shared">Spoločný</span>
+              }
+            </td>
+            <td data-label="Pridal">
+              {{ entry.isMine ? 'ja' : entry.createdBy }}
+            </td>
+            <td data-label="Dátum">{{ entry.createdAt | date: 'd.M.yyyy HH:mm' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>
