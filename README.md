@@ -164,8 +164,7 @@ pomlčky a zátvorky (5–32 znakov), `visibility` je `Personal` alebo `Shared`.
 Neplatná požiadavka vráti `400` s popisom chýb pre každé pole.
 
 Pripravené požiadavky na ručné testovanie sú v
-[`backend/Phonebook.Api/Phonebook.Api.http`](backend/Phonebook.Api/Phonebook.Api.http)
-(VS Code rozšírenie *REST Client* alebo JetBrains HTTP Client).
+[`backend/Phonebook.Api/Phonebook.Api.http`](backend/Phonebook.Api/Phonebook.Api.http).
 
 ## Konfigurácia
 
