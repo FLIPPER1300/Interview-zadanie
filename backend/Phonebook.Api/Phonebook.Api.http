@@ -1,0 +1,44 @@
+### Manual API requests (VS Code "REST Client" extension or JetBrains HTTP Client).
+### Paste an access token from Keycloak into @token (see README for how to get one).
+
+@host = http://localhost:5225
+@token = PASTE_ACCESS_TOKEN_HERE
+
+### Health check (no token needed)
+GET {{host}}/health
+
+### List phone numbers visible to the current user
+GET {{host}}/api/phones
+Authorization: Bearer {{token}}
+
+### Add a personal phone number
+POST {{host}}/api/phones
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Ján Novák",
+  "number": "+421 900 123 456",
+  "visibility": "Personal"
+}
+
+### Add a shared phone number
+POST {{host}}/api/phones
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Recepcia",
+  "number": "+421 2 1234 5678",
+  "visibility": "Shared"
+}
+
+### Invalid request - should return 400 with validation errors
+POST {{host}}/api/phones
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "",
+  "number": "abc"
+}
