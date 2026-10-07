@@ -82,5 +82,16 @@ services:
       keycloak:
         condition: service_healthy
 
+  # ---------------------------------------------------------------------------
+  # Angular frontend served by nginx (also proxies /api to the backend)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
 volumes:
   postgres-data:

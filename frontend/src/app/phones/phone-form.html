@@ -1,0 +1,41 @@
+<form [formGroup]="form" (ngSubmit)="submit()" class="card">
+  <h2>Pridať číslo</h2>
+
+  <div class="fields">
+    <label class="field">
+      <span>Meno / popis</span>
+      <input formControlName="name" type="text" autocomplete="off" placeholder="napr. Ján Novák" />
+      @if (showError('name')) {
+        <small class="error">Zadajte meno (max. 100 znakov).</small>
+      }
+    </label>
+
+    <label class="field">
+      <span>Telefónne číslo</span>
+      <input formControlName="number" type="tel" autocomplete="off" placeholder="+421 900 123 456" />
+      @if (showError('number')) {
+        <small class="error">Zadajte platné číslo (číslice, medzery, +, -, zátvorky).</small>
+      }
+    </label>
+  </div>
+
+  <fieldset class="visibility">
+    <legend>Viditeľnosť</legend>
+    <label class="option">
+      <input type="radio" formControlName="visibility" value="Personal" />
+      <span><strong>Osobný zoznam</strong> – vidím ho len ja</span>
+    </label>
+    <label class="option">
+      <input type="radio" formControlName="visibility" value="Shared" />
+      <span><strong>Spoločný zoznam</strong> – vidia ho všetci používatelia</span>
+    </label>
+  </fieldset>
+
+  @if (serverError(); as message) {
+    <p class="error" role="alert">{{ message }}</p>
+  }
+
+  <button type="submit" [disabled]="saving()">
+    {{ saving() ? 'Ukladám…' : 'Pridať' }}
+  </button>
+</form>
