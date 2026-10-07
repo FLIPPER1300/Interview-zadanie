@@ -1,0 +1,86 @@
+name: phonebook
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL - one server, two databases: "keycloak" and "phonebook"
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres}
+      # Read by db/init/01-create-databases.sh
+      KEYCLOAK_DB_USER: keycloak
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      APP_DB_USER: phonebook
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-phonebook}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # Keycloak - login page and token issuer; realm imported from ./keycloak
+  # ---------------------------------------------------------------------------
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
+      # Public URL used by the browser and written into tokens as "iss".
+      KC_HOSTNAME: http://localhost:8080
+      # Lets the backend reach Keycloak internally via http://keycloak:8080.
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      # The image has no curl/wget, so the readiness endpoint is called via bash's /dev/tcp.
+      test:
+        - CMD-SHELL
+        - >-
+          exec 3<>/dev/tcp/localhost/9000 &&
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3 &&
+          grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # ---------------------------------------------------------------------------
+  # .NET 10 backend API
+  # ---------------------------------------------------------------------------
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      ConnectionStrings__Phonebook: Host=postgres;Port=5432;Database=phonebook;Username=phonebook;Password=${APP_DB_PASSWORD:-phonebook}
+      Keycloak__Issuer: http://localhost:8080/realms/phonebook
+      Keycloak__MetadataAddress: http://keycloak:8080/realms/phonebook/.well-known/openid-configuration
+      Keycloak__Audience: phonebook-api
+    ports:
+      - "5225:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
