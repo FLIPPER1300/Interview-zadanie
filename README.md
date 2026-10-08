@@ -22,15 +22,40 @@ Jednoduchá full-stack aplikácia na správu telefónnych čísel.
 
 ## Rýchly štart
 
-Potrebný je len **Docker** (Docker Desktop alebo Docker Engine s Compose v2).
+Potrebný je len **Docker** – Docker Desktop 4.26+ (Windows / macOS) alebo Docker Engine
+s Compose v2.23+ (Linux). Nie je potrebný git, .NET ani Node.js.
+
+> **Na spustenie stačí jediný súbor – [`docker-compose.yml`](docker-compose.yml).**
+> Aplikačné image sa stiahnu z Docker Hubu a konfigurácia databázy aj Keycloaku
+> je vložená priamo v ňom. Zvyšok repozitára slúži len na vývoj a zostavenie image.
+
+### Možnosť A: len `docker-compose.yml` (odporúčané)
+
+1. Stiahnite súbor [`docker-compose.yml`](docker-compose.yml) – na GitHube otvorte súbor
+   a kliknite na ikonu **Download raw file** (vpravo nad obsahom súboru).
+2. Uložte ho do ľubovoľného prázdneho priečinka, napr. `phonebook`.
+3. Otvorte v tomto priečinku terminál
+   (Windows: pravý klik do priečinka → **Open in Terminal**; macOS: **Terminal** a `cd` do priečinka).
+4. Spustite:
+
+   ```bash
+   docker compose up
+   ```
+
+### Možnosť B: z naklonovaného repozitára
 
 ```bash
 git clone <url-repozitára>
 cd <repozitár>
-docker compose up
+docker compose up             # stiahne publikované image
+docker compose up --build     # alebo zostaví image zo zdrojového kódu
 ```
 
-Prvé spustenie trvá približne minútu (stiahnutie image, štart Keycloaku). Potom otvorte:
+### Po spustení
+
+Prvé spustenie trvá približne minútu (stiahnutie image, štart Keycloaku). Hotovo je, keď
+`docker compose ps` ukazuje všetky služby ako `Up` / `healthy`, alebo keď v Docker Desktope
+v sekcii **Containers** svieti skupina `phonebook` nazeleno. Potom otvorte:
 
 | Čo                    | Adresa                                   | Prihlásenie       |
 |-----------------------|------------------------------------------|-------------------|
@@ -48,12 +73,15 @@ Prvé spustenie trvá približne minútu (stiahnutie image, štart Keycloaku). P
 Odporúčaný test: prihláste sa ako `alice`, pridajte jedno osobné a jedno spoločné číslo, odhláste sa
 a prihláste ako `bob` – uvidí iba spoločné číslo.
 
-Zastavenie:
+Zastavenie (v tom istom priečinku):
 
 ```bash
 docker compose down        # zastaví kontajnery, dáta zostanú
 docker compose down -v     # zastaví a vymaže aj databázu (čistý štart)
 ```
+
+Po prvom spustení je možné aplikáciu zastavovať a znova spúšťať aj bez terminálu –
+v Docker Desktope v sekcii **Containers** tlačidlami pri skupine `phonebook`.
 
 ## Docker image
 
@@ -64,10 +92,18 @@ Aplikačné image sú verejne publikované na Docker Hube (platformy `linux/amd6
 | Backend  | [`flipper130/phonebook-api:1.0.0`](https://hub.docker.com/r/flipper130/phonebook-api)              |
 | Frontend | [`flipper130/phonebook-frontend:1.0.0`](https://hub.docker.com/r/flipper130/phonebook-frontend)    |
 
-`docker compose up` ich stiahne automaticky. Ak ich chcete namiesto toho zostaviť zo zdrojového kódu:
+`docker compose up` ich stiahne automaticky. Ak ich chcete namiesto toho zostaviť zo zdrojového kódu
+(len v naklonovanom repozitári):
 
 ```bash
 docker compose up --build
+```
+
+Zostavenie a publikovanie novej verzie (vyžaduje `docker login`):
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 -t flipper130/phonebook-api:1.0.0 --push ./backend
+docker buildx build --platform linux/amd64,linux/arm64 -t flipper130/phonebook-frontend:1.0.0 --push ./frontend
 ```
 
 PostgreSQL (`postgres:18-alpine`) a Keycloak (`quay.io/keycloak/keycloak:26.4`) sú oficiálne image.
@@ -170,7 +206,7 @@ Pripravené požiadavky na ručné testovanie sú v
 
 `docker compose up` funguje bez akéhokoľvek nastavovania. Heslá majú predvolené hodnoty
 vhodné pre lokálne spustenie a dajú sa prepísať premennými prostredia alebo súborom `.env`
-v koreni repozitára:
+v rovnakom priečinku ako `docker-compose.yml`:
 
 | Premenná                  | Predvolená hodnota | Význam                                  |
 |---------------------------|--------------------|-----------------------------------------|
@@ -183,10 +219,19 @@ v koreni repozitára:
 
 Používané porty: `4200` (frontend), `8080` (Keycloak), `5225` (backend).
 
-Databázy sa vytvoria pri prvom štarte PostgreSQL skriptom
-[`db/init/01-create-databases.sh`](db/init/01-create-databases.sh), tabuľky aplikácie
-vytvorí backend pri štarte (EF Core migrácie). Realm, klient a testovací používatelia sa
-importujú z [`keycloak/realm-phonebook.json`](keycloak/realm-phonebook.json).
+Konfigurácia, ktorú by inak bolo treba dodať ako samostatné súbory, je vložená priamo
+v [`docker-compose.yml`](docker-compose.yml) v sekcii `configs` (Compose ju pri štarte
+vloží do kontajnerov ako súbory):
+
+| Config           | Kam sa vloží                         | Čo robí                                                                 |
+|------------------|--------------------------------------|-------------------------------------------------------------------------|
+| `postgres-init`  | `/docker-entrypoint-initdb.d/` v `postgres` | Pri prvom štarte vytvorí databázy `keycloak` a `phonebook` a ich používateľov |
+| `keycloak-realm` | `/opt/keycloak/data/import/` v `keycloak`   | Realm `phonebook`: klient pre frontend, audience pre API, testovací používatelia |
+
+Tabuľky aplikácie vytvorí backend pri štarte (EF Core migrácie).
+
+Oba configy sa použijú **len pri prvom štarte** (prázdna databáza). Po ich úprave je potrebný
+čistý štart: `docker compose down -v` a potom `docker compose up` – vymaže to všetky dáta.
 
 ## Lokálny vývoj
 
@@ -228,9 +273,8 @@ npm test        # unit testy (Vitest)
 
 ```
 .
-├── docker-compose.yml          # celé prostredie jedným príkazom
-├── db/init/                    # vytvorenie databáz pri prvom štarte PostgreSQL
-├── keycloak/                   # import realmu (klient, používatelia)
+├── docker-compose.yml          # celé prostredie jedným príkazom, vrátane konfigurácie
+│                               # databázy a Keycloak realmu (sekcia configs)
 ├── backend/
 │   ├── Dockerfile
 │   └── Phonebook.Api/
@@ -249,8 +293,12 @@ npm test        # unit testy (Vitest)
 
 - **Jeden PostgreSQL server, dve databázy.** Zadanie požaduje PostgreSQL pre Keycloak aj aplikáciu.
   Každá služba má vlastnú databázu a vlastného používateľa, takže nevidia dáta tej druhej.
-- **Konfigurácia Keycloaku ako kód.** Realm sa importuje zo súboru, nie je potrebné nič klikať.
-  Import prebehne len ak realm ešte neexistuje – zmeny v súbore sa prejavia po `docker compose down -v`.
+- **Samostatný `docker-compose.yml`.** Inicializačný SQL skript aj Keycloak realm sú vložené
+  priamo v compose súbore (`configs` s `content`), takže na spustenie stačí tento jeden súbor
+  a publikované image. Nevýhodou je dlhší compose súbor; výhodou, že neexistujú dve verzie
+  konfigurácie, ktoré by sa mohli rozísť.
+- **Konfigurácia Keycloaku ako kód.** Realm sa importuje automaticky, nie je potrebné nič klikať.
+  Import prebehne len ak realm ešte neexistuje – zmeny sa prejavia po `docker compose down -v`.
 - **Keycloak beží v režime `start-dev`.** Produkčný režim vyžaduje HTTPS a certifikáty, čo by
   zbytočne skomplikovalo lokálne spustenie. Pre produkciu: `start`, HTTPS, reverse proxy, silné heslá.
 - **Verejná a interná adresa Keycloaku.** Prehliadač vidí Keycloak na `localhost:8080`, backend
@@ -271,4 +319,5 @@ npm test        # unit testy (Vitest)
 | Port `4200`, `8080` alebo `5225` je obsadený | Zastavte aplikáciu na danom porte alebo zmeňte mapovanie portov v `docker-compose.yml` (pri zmene portu frontendu/Keycloaku treba upraviť aj realm a `app.config.ts`). |
 | Po prihlásení sa zobrazí „Zoznam sa nepodarilo načítať“ | Backend ešte štartuje – počkajte pár sekúnd a kliknite na *Skúsiť znova*. Logy: `docker compose logs backend`. |
 | Keycloak dlho štartuje | Pri prvom štarte je to bežné (~30 s). Stav: `docker compose ps`. |
-| Zmena v `realm-phonebook.json` sa neprejavila | `docker compose down -v && docker compose up` (vymaže dáta). |
+| Zmena realmu alebo hesiel v `docker-compose.yml` sa neprejavila | Configy sa použijú len pri prvom štarte: `docker compose down -v` a potom `docker compose up` (vymaže dáta). |
+| `configs.content` / „additional properties not allowed“ | Príliš stará verzia Docker Compose – aktualizujte Docker Desktop (4.26+) alebo Compose (v2.23+). |

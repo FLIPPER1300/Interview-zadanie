@@ -1,3 +1,12 @@
+# Phonebook – complete stack: PostgreSQL, Keycloak, .NET 10 backend, Angular frontend.
+#
+# This file is self-contained: download just this file and run `docker compose up`.
+# Application images are pulled from Docker Hub; the database init script and the
+# Keycloak realm are embedded below (see `configs`), so no other files are needed.
+#
+# Inside the repository, `docker compose up --build` builds the images from source instead.
+# Requires Docker Compose v2.23 or newer (Docker Desktop 4.26+).
+
 name: phonebook
 
 services:
@@ -10,14 +19,12 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_ADMIN_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:-postgres}
-      # Read by db/init/01-create-databases.sh
-      KEYCLOAK_DB_USER: keycloak
-      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:-keycloak}
-      APP_DB_USER: phonebook
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-phonebook}
+    configs:
+      # Files in /docker-entrypoint-initdb.d run once, on the first start (empty volume).
+      - source: postgres-init
+        target: /docker-entrypoint-initdb.d/01-create-databases.sql
     volumes:
       - postgres-data:/var/lib/postgresql
-      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER}"]
       interval: 5s
@@ -25,7 +32,7 @@ services:
       retries: 10
 
   # ---------------------------------------------------------------------------
-  # Keycloak - login page and token issuer; realm imported from ./keycloak
+  # Keycloak - login page and token issuer; realm imported on first start
   # ---------------------------------------------------------------------------
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
@@ -43,8 +50,9 @@ services:
       KC_HEALTH_ENABLED: "true"
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
-    volumes:
-      - ./keycloak:/opt/keycloak/data/import:ro
+    configs:
+      - source: keycloak-realm
+        target: /opt/keycloak/data/import/realm-phonebook.json
     ports:
       - "8080:8080"
     depends_on:
@@ -97,3 +105,83 @@ services:
 
 volumes:
   postgres-data:
+
+configs:
+  # Separate database and user for Keycloak and for the application, so neither
+  # service can read or modify the other's data. ${...} values are filled in by Compose.
+  postgres-init:
+    content: |
+      CREATE USER keycloak WITH PASSWORD '${KEYCLOAK_DB_PASSWORD:-keycloak}';
+      CREATE DATABASE keycloak OWNER keycloak;
+
+      CREATE USER phonebook WITH PASSWORD '${APP_DB_PASSWORD:-phonebook}';
+      CREATE DATABASE phonebook OWNER phonebook;
+
+  # Keycloak realm: public frontend client (authorization code + PKCE), an audience
+  # mapper adding "phonebook-api" to access tokens, and two test users.
+  # Imported only when the realm does not exist yet (`docker compose down -v` to re-import).
+  keycloak-realm:
+    content: |
+      {
+        "realm": "phonebook",
+        "displayName": "Phonebook",
+        "enabled": true,
+        "registrationAllowed": false,
+        "loginWithEmailAllowed": true,
+        "sslRequired": "none",
+        "clients": [
+          {
+            "clientId": "phonebook-frontend",
+            "name": "Phonebook Angular frontend",
+            "enabled": true,
+            "publicClient": true,
+            "protocol": "openid-connect",
+            "standardFlowEnabled": true,
+            "implicitFlowEnabled": false,
+            "directAccessGrantsEnabled": false,
+            "serviceAccountsEnabled": false,
+            "rootUrl": "http://localhost:4200",
+            "baseUrl": "/",
+            "redirectUris": ["http://localhost:4200/*"],
+            "webOrigins": ["http://localhost:4200"],
+            "attributes": {
+              "pkce.code.challenge.method": "S256",
+              "post.logout.redirect.uris": "http://localhost:4200/*"
+            },
+            "protocolMappers": [
+              {
+                "name": "phonebook-api-audience",
+                "protocol": "openid-connect",
+                "protocolMapper": "oidc-audience-mapper",
+                "consentRequired": false,
+                "config": {
+                  "included.custom.audience": "phonebook-api",
+                  "access.token.claim": "true",
+                  "id.token.claim": "false",
+                  "introspection.token.claim": "true"
+                }
+              }
+            ]
+          }
+        ],
+        "users": [
+          {
+            "username": "alice",
+            "email": "alice@example.com",
+            "emailVerified": true,
+            "firstName": "Alice",
+            "lastName": "Example",
+            "enabled": true,
+            "credentials": [{ "type": "password", "value": "alice", "temporary": false }]
+          },
+          {
+            "username": "bob",
+            "email": "bob@example.com",
+            "emailVerified": true,
+            "firstName": "Bob",
+            "lastName": "Example",
+            "enabled": true,
+            "credentials": [{ "type": "password", "value": "bob", "temporary": false }]
+          }
+        ]
+      }
